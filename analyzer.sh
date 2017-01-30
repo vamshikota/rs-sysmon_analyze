@@ -51,12 +51,11 @@ if [[ $ws == "httpd" ]] || [[ $ws == "httpd.worker" ]];
 			do 
 				echo -n "="; 
 			done;`\n"
-		`ps -H h -ylC httpd | perl -lane '$s+=$F[7];$i++;END{printf"Avg %mem / Apache process = %.1fMB\n",$s/$i/1024}' ` 
-		"\n" 
-		`grep -i maxclients /etc/httpd/conf/httpd.conf | grep -v ^# | head -1 | awk '{print $1, "is set to --", $2}' ` 
+		ps -H h -ylC httpd | perl -lane '$s+=$F[7];$i++;END{printf"Avg %mem / Apache process = %.1fMB\n",$s/$i/1024}' 
+		grep -i maxclients /etc/httpd/conf/httpd.conf | grep -v ^# | head -1 | awk '{print $1, "is set to --", $2}' 
 
 ### Current connections
-		"\n\nCurrent connections :"; 
+		echo -e "\n\nCurrent connections :"; 
 		pstree -G | grep http; 
 		echo -e  "\n\nIPs conneting now :\n"; 
 		netstat -ant | grep \:80 | egrep "ESTABLISHED|SYN_RECV" | awk '{ print $5 }' | sed -e 's/\:\:ffff\://g' | awk -F: '{print $1}' | sort | uniq -c | sort -nr |awk '{print $1 " "$2}' | head; 
