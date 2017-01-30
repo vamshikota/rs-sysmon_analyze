@@ -50,8 +50,7 @@ if [[ $ws == "httpd" ]] || [[ $ws == "httpd.worker" ]];
 		for i in {1..30}; 
 			do 
 				echo -n "="; 
-			done;`
-		\n" 
+			done;`\n"
 		`ps -H h -ylC httpd | perl -lane '$s+=$F[7];$i++;END{printf"Avg %mem / Apache process = %.1fMB\n",$s/$i/1024}' ` 
 		"\n" 
 		`grep -i maxclients /etc/httpd/conf/httpd.conf | grep -v ^# | head -1 | awk '{print $1, "is set to --", $2}' ` 
