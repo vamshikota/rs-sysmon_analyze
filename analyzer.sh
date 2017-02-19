@@ -88,7 +88,7 @@ if [[ $ws == "httpd" ]] || [[ $ws == "httpd.worker" ]];
 
 				for i in `cat $tf_ip | awk '{print $2}'`; 
 					do 
-						echo -e $i "\t"---"\t" `whois $i | grep -i country | head -1`  "\t"---"\t" `whois $i | grep -i netname `; 
+						echo -e $i "\t"---"\t" `timeout 2 whois $i | grep -i country | head -1`  "\t"---"\t" `timeout 2 whois $i | grep -i netname `; 
 					done; 
 		fi; 
 	rm -rf $tf_ip;
