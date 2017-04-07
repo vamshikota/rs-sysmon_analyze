@@ -154,7 +154,7 @@ if `ps auxf | grep mysqld | grep -v grep > /dev/null `;
 		if [ $setto_st == "on" ]; 
 			then 
 				echo -e "\nAnd is set to on"; 
-			else echo "\nAnd is not set to on"; 
+			else echo -e "\nAnd is not set to on"; 
 		fi; 
 	echo $setto | column -t; 
 	echo -e "\nMySQL configuration : "; 
