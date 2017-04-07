@@ -151,7 +151,7 @@ if `ps auxf | grep mysqld | grep -v grep > /dev/null `;
 		echo -e "\n\n$pkg \n------ is installed and running"; 
 		setto=$(chkconfig --list $(rpm -ql $pkg | grep init.d | awk -F "/" '{print $(NF-0)}')); 
 		setto_st=$(echo $setto | awk '{print $5}' |cut -d ":" -f2); 
-		if [ $setto_st == "on" ]; 
+		if [[ $setto_st == "on" ]]; 
 			then 
 				echo -e "\nAnd is set to on"; 
 			else echo -e "\nAnd is not set to on"; 
