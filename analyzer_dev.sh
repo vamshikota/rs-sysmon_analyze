@@ -1,188 +1,166 @@
-clear; 
+clear;
+#set -e   
 
-### Is rs-sysmon installed ?
-echo "Checking if rs-sysmon is installed..."; 
+service=$1
+arg1=$2
+arg2=$3
 
-if [ $(which rs-sysmon) ]; 
-	then 
-		echo -e "rs-sysmon is installed.\nProceeding.. "; 
-	else 
-		echo "rs-sysmon is not installed"; 
-		exit 0; 
-fi; 
+
+## FUNCTIONS ##
 
 
 
-### proceeding if installed.. copy logs
-echo -n "ticket_no: "; read t; 
-mkdir /home/rack/$t; 
-echo "Copying files.. please bare with me... "; 
-cp -ar /var/log/rs-sysmon /home/rack/$t; 
-cd  /home/rack/$t/rs-sysmon; 
-clear; echo -e "Done.";  
-
-### Server Config ###
-echo -e "\nServer Configuration: \nDisk space Status :"; 
-df -h /; 
-echo -e "\n"Processors -- `grep proc  /proc/cpuinfo | wc -l`;  
-echo -e Memory "\t  " -- `free -m | grep Mem | awk '{print $2, "MB"}'` ;   
+## =======================================================================
 
 
-### rs-sysmon config
-echo -e "\nrs-sysmon Configuration:"; 
-cat /etc/rs-sysmon  | egrep -i 'rotate|status|mysql' | grep -v ^#; 
-echo "logging every --- `grep -v ^# /etc/cron.d/rs-sysmon | grep "*" | awk '{print $1}' | cut -d \/ -f2` minutes"; 	
-echo -e "\nI have copied rs-sysmon logs to the path  /home/rack/$t/rs-sysmon. From the recent logs I see :"; 
+green() {
+echo -e "\e[32m$1\e[0m"
+}
 
-### Log Analysis Start
-echo -e "\nServer Load: \n============"; 
-for i in resources.log.{1..30}; 
-	do 
-		echo $i -- `head -1 $i` -- `grep "load average" $i | awk '{print ($(NF-4),$(NF-3),$(NF-2),$(NF-1),$(NF-0))}'`; 
-	done; 
+red() {
+echo -e "\e[31m$1\e[0m"
+}
 
-### Detect Webserver
-echo -e "\n\n";ws=`netstat -ntlp | awk '$4~/:80$/' | awk '{split($(NF-0),a,"/");print a[2] }'|uniq`;  
-echo -e "$ws is running on port 80 \n\n";  
-if [[ $ws == "httpd" ]] || [[ $ws == "httpd.worker" ]]; 
-	then 
-		echo -e "\nCurrent Apache Config/Status: \n`
-		for i in {1..30}; 
-			do 
-				echo -n "="; 
-			done;`\n"
-		ps -H h -ylC httpd | perl -lane '$s+=$F[7];$i++;END{printf"Avg %mem / Apache process = %.1fMB\n",$s/$i/1024}' 
-		grep -i maxclients /etc/httpd/conf/httpd.conf | grep -v ^# | head -1 | awk '{print $1, "is set to --", $2}' 
+yellow() {
+echo -e "\e[93m$1\e[0m"
+}
 
-### Current connections
-		echo -e "\n\nCurrent connections :"; 
-		pstree -G | grep http; 
-		echo -e  "\n\nIPs conneting now :\n"; 
-		netstat -ant | grep \:80 | egrep "ESTABLISHED|SYN_RECV" | awk '{ print $5 }' | sed -e 's/\:\:ffff\://g' | awk -F: '{print $1}' | sort | uniq -c | sort -nr |awk '{print $1 " "$2}' | head; 
-		echo -e "\nErrors from apache logs: \n";  
-		grep -i maxclients /var/log/httpd/error_log;
-		fs=`grep -i fullstatus /etc/rs-sysmon | grep -v ^# | cut -d "=" -f2 | awk '{print $1}'`;
-		
-		if [ $fs == "no" ]; 
-			then 
-				echo -e "\n\nApache fullstatus is not being recorded. \nSuggest to enable it in /etc/rs-sysmon"; 
-			else 
-				echo -e "\nApache Analysis  :"; 
-				echo -e "\t Time \t\t Threads CPU% \t Mem % \t File"; 
-				for i in `seq 30`; 
-					do 
-						head -1 resources.log.$i | tr "\n" " "; 
-						grep currently resources.log.$i | awk '{print "\t", $1}' | tr "\n" " " ;
-						grep http ps.log.$i | awk '{ sum += $3 } END {print "\t", sum }'| tr "\n" " " ;
-						grep http ps.log.$i | awk '{ sum += $4 } END {print "\t", sum }' | tr "\n" " "; 
-						echo -e "\t resources.log.$i";
-					done; 
-				echo -e "\nMost visited Sites :" ; 
-				egrep 'GET|POST' resources.log.{1..30} |awk '{print $12}' | sort | uniq -c | sort -rn| head; 
-				echo -e "\nLocations visited the most : " ; 
-				egrep 'GET|POST' resources.log.{1..30} |awk '{print $12,$13,$14}' | sort | uniq -c | sort -rn | head ; 
-				echo -e "\nIPs that are hitting the most: "; 
-				tf_ip=`mktemp`; 
-				egrep 'GET|POST' resources.log.{1..30} |awk '{print $11}' | sort | uniq -c | sort -nr | head > $tf_ip; 
-				cat $tf_ip; echo -e "\nIP Analysis"; 
-
-				for i in `cat $tf_ip | awk '{print $2}'`; 
-					do 
-						echo -e $i "\t"---"\t" `timeout 2 whois $i | grep -i country | head -1`  "\t"---"\t" `timeout 2 whois $i | grep -i netname `; 
-					done; 
-		fi; 
-	rm -rf $tf_ip;
-	elif [[ $ws == "nginx" ]];  
-		then 
-			curl -s nginxctl.rax.io | python - -S; 
-			echo "nginx listening on :"; 
-			netstat -ntlp | grep nginx | awk '{print $4}' ;  
-			echo -e "\nNginx Log files:\n"; 
-			ls -ltrh $(lsof -u `grep -i ^user /etc/nginx/nginx.conf  | awk '{print $2}' | cut -d ";" -f1` | grep log$ | awk '{print $(NF-0)}' | sort | uniq); 
-	elif  [[ $ws == "varnishd" ]]; 
-		then 
-			echo "$ws is on port 80"; 
-			vconf=`grep -i ^VARNISH_VCL_CONF /etc/sysconfig/varnish  | grep -v ^# | cut -d "=" -f2`; 
-			echo "Varnish config file(s) is(are) :" $vconf; 
-			echo -e "\n\nLoking at config file :"; 
-			host_count=$(grep -i .host $vconf | grep -v "#" | wc -l); 
-
-			if [[ $host_count -gt 1 ]]; 
-				then 
-					echo "Varnishi has multiple backends ($host_count); Take a look at $vconf"; 
-				else 
-					echo "Backend is : " `grep -i .host $vconf -c| grep -v "#"` ;
-			fi; 
-	fi; 
+lines() {
+for i in `seq $1`; do
+	echo -n "="
+done
+echo
+}
 
 
-### http count from ps.log
-echo -e "\nHTTP Count from Ps.log files :"; 
-for lining in `seq 30`; 
-	do 
-		echo -n "="; 
-	done; 
-
-echo "";
-for i in ps.log.{1..30}; 
-	do 
-		echo -e `head -1 $i` "\t---\t" $i "\t---\t" `grep http $i|wc -l`; 
-	done; 
-
-### http status from netstat.log
-echo -e "\nHTTP connection status from netstat logs:"; 
-
-for lining in `seq 40`; 
-	do echo -n "="; 
-	done; 
-
-echo ""; echo -e TIME "\t\t\t" FILE "\t\t\t" SYN_RECV "\t"TIME_WAIT "\t" CLOSE_WAIT "\t"ESTABLISHED; 
-for i in netstat.log.{1..30}; 
-	do echo -e `head -1 $i` "\t" $i"\t\t" `grep -i SYN_RECV $i |wc -l` "\t\t" `grep -i time_wait $i |wc -l` "\t\t" `grep -i close_wait $i |wc -l` "\t\t" `grep -i ESTABLISHED $i |wc -l`; 
-	done;
-
-db_temp=$(rpm -qa| egrep -i 'mysql-server|mysql[0-9][0-9]u-server|mariadb-server|mariadb[0-9][0-9][0-9]u-server|percona-server-server ' | tail -1);
-
-
-##### is mysql installed running  ??? 
-if `ps auxf | grep mysqld | grep -v grep > /dev/null `; 
-	then 
-		pkg=$(rpm -qf $(ps auxf | grep mysqld | grep -vE 'grep|safe' | awk '{print $12}') | tail -1); 
-		echo -e "\n\n$pkg \n------ is installed and running"; 
-		setto=$(chkconfig --list $(rpm -ql $pkg | grep init.d | awk -F "/" '{print $(NF-0)}')); 
-		setto_st=$(echo $setto | awk '{print $5}' |cut -d ":" -f2); 
-		if [[ $setto_st == "on" ]]; 
-			then 
-				echo -e "\nAnd is set to on"; 
-			else echo -e "\nAnd is not set to on"; 
-		fi; 
-	echo $setto | column -t; 
-	echo -e "\nMySQL configuration : "; 
-	mysql -Nse "show variables like 'max_connections'" | awk '{print $1,"\t--\t",$2}'; 
-	mysql -Nse "show status like 'max_used%'"| awk '{print $1,"\t--\t",$2}'; 
-	echo -e "Mysql Uptime  \t\t--\t" `mysqladmin stat | awk '{print $2/60/60, "Hours"}' `;
-elif [ ! -z "$db_temp" ]; 
-	then 
-		echo -e "\n\n" $db_temp "\n------> is insalled but not running."; 
-else 
-	echo  -e "\n\nMysql/Mariadb/Percona none of the database is even installed" ;
+## =======================================================================
+find_os() {
+if [[ -a /etc/redhat-release ]]; then
+        os=$(for i in $(cat /etc/redhat-release);
+                do echo $i | tr "A-Z" "a-z" | awk '$1~ /^(centos|red|hat|[0-9])/';
+                done | tr "\n" " " | sed 's/red\ hat/redhat/g');
+else
+        os=$(grep -i pretty_name /etc/*-release | cut -d= -f2 | sed 's/\"//g'| awk '{print $1,$2}'| tr "A-Z" "a-z");
 fi;
 
-a=`grep -i mysqlprocesslist /etc/rs-sysmon | cut -d = -f2`; b="yes";  
-if [ "$a" == "$b" ]; 
-	then 
-		echo -e  "\nMysql Analysis :";  
-		echo -e "\t Time \t\t Threads CPU% \t Mem %\t File"; 
-		for i in `seq 30`; 
-			do 
-				head -1 mysql.log.$i | tr "\n" " "; 
-				grep -i uptime mysql.log.$i |  awk '{print "\t",$4}' | tr "\n" " " ;
-				grep mysql ps.log.$i | awk '{ sum += $3 } END {print "\t", sum }'| tr "\n" " " ;
-				grep mysql ps.log.$i | awk '{ sum += $4 } END {print "\t", sum }'| tr "\n" " "; 
-				echo -e "\t mysql.log.$i"; 
-			done; 
+#echo -e "\nOS: $os"
 
+os_short() {
+if [[ $os == ubuntu* ]]; then 
+	os_short="ubuntu"
+elif [[ $(echo $os|awk '{print $2}'|cut -d. -f1) -le 6 ]]; then 
+	os_short="rhel6"
 else 
-	echo -e "\nAt the moment rs-sysmon is not logging mysql : \n`grep -i mysqlprocesslist /etc/rs-sysmon`"; 
-fi; 
+	os_short="rhel7"
+fi
+}
+
+os_short
+
+}
+## =======================================================================
+server_info() {
+
+cpu_count=$(grep -ic proc /proc/cpuinfo);
+echo "No. of cpus $cpu_count"
+
+memory=$(free -m | grep Mem | awk '{print $2, "MB"}';)
+echo "Memory = $memory"
+
+rpm -q psa 2>&1 > /dev/null
+
+if [[ $? == 1 ]]; then
+        plesk_installed="no"
+else
+        echo "Plesk Server"
+        plesk_installed="yes"
+        psa_version=$(rpm -q psa)
+fi;
+l;jlj
+
+}
+## =======================================================================
+
+sysmon_recap() {
+
+if [[ $(which rs-sysmon) ]];
+        then
+                sysmon_installed="yes"
+	else
+                sysmon_installed="no"
+fi;
+
+
+if [[ $(which recap) ]]; then
+                recap_installed="yes"
+        else
+                recap_installed="no"
+fi;
+
+if [[ rs_sysmon_installed == "yes" && recap_installed == "yes" ]]; then
+	sysmon_recap_both="yes"
+elif [[ rs_sysmon_installed == "yes" && recap_installed == "no" ]]; then
+	sysmon_only="yes"
+	using="sysmon"
+elif [[ rs_sysmon_installed == "no" && recap_installed == "yes" ]]; then
+	recap_only="yes"
+	using="recap"
+fi
+
+
+
+if [[ $sysmon_recap_both == "yes" ]]; then
+	today=$(date +%Y-%m-%d); 
+	recap_last_update=$(stat -c %y  $(ls -1tr /var/log/recap/  | tail -1)  | awk '{print $1}');
+	sysmon_last_update=$(stat -c %y  $(ls -1tr /var/log/rs-sysmon/  | tail -1)  | awk '{print $1}');
+
+	if [[ $today == $recap_last_update ]]; then
+		recap_current="yes"
+	else 
+		recap_current="no"
+	fi
+
+        if [[ $today == $sysmon_last_update ]]; then
+                sysmon_current="yes"
+        else
+                sysmon_current="no"
+        fi
+
+if [[ sysmon_current == "yes" && recap_current == "yes" ]]; then
+        sysmon_recap_both_current="yes"
+	echo "Interstingly, both rs-sysmon and recap are current."
+	echo "Using recap.." 
+	using="recap"
+elif [[ sysmon_current == "yes" && recap_current == "no" ]]; then
+        sysmon_current_only="yes"
+	using="sysmon"
+elif [[ sysmon_current == "no" && recap_current == "yes" ]]; then
+        recap_current_only="yes"
+	using="recap"
+fi
+
+	
+fi	
+
+	
+}
+
+## =======================================================================
+
+
+find_os
+echo $os
+echo $os_short
+
+green green
+red red
+yellow yellow
+
+lines 30
+server_info
+
+sysmon_recap
+echo $using
+
+
 
