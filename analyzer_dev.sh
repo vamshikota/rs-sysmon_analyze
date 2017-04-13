@@ -83,26 +83,29 @@ l;jlj
 
 sysmon_recap() {
 
-if [[ $(which rs-sysmon) ]];
-        then
-                sysmon_installed="yes"
-	else
-                sysmon_installed="no"
+which rs-sysmon &> /dev/null
+
+if [[ $(echo $?) == 0 ]]; then
+	sysmon_installed="yes"
+else
+	sysmon_installed="no"
 fi;
 
 
-if [[ $(which recap) ]]; then
-                recap_installed="yes"
-        else
-                recap_installed="no"
+which recap &> /dev/null
+if [[ $(echo $?) == 0 ]]; then
+	recap_installed="yes"
+else
+	recap_installed="no"
 fi;
 
-if [[ rs_sysmon_installed == "yes" && recap_installed == "yes" ]]; then
+
+if [[ $sysmon_installed == "yes" && $recap_installed == "yes" ]]; then
 	sysmon_recap_both="yes"
-elif [[ rs_sysmon_installed == "yes" && recap_installed == "no" ]]; then
+elif [[ $sysmon_installed == "yes" && $recap_installed == "no" ]]; then
 	sysmon_only="yes"
 	using="sysmon"
-elif [[ rs_sysmon_installed == "no" && recap_installed == "yes" ]]; then
+elif [[ $sysmon_installed == "no" && $recap_installed == "yes" ]]; then
 	recap_only="yes"
 	using="recap"
 fi
@@ -160,6 +163,7 @@ lines 30
 server_info
 
 sysmon_recap
+echo test
 echo $using
 
 
